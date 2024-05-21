@@ -52,7 +52,7 @@ class LossFunction(Protocol):
         batch before logging.
     """
 
-
+"""Weighted mean squared error loss."""
 def weighted_mse_per_level(
     predictions: xarray.Dataset,
     targets: xarray.Dataset,
@@ -69,7 +69,7 @@ def weighted_mse_per_level(
   losses = xarray_tree.map_structure(loss, predictions, targets)
   return sum_per_variable_losses(losses, per_variable_weights)
 
-"""Weighted mean average error loss."""
+"""Weighted mean absolute error loss."""
 def weighted_mae_per_level(
     predictions: xarray.Dataset,
     targets: xarray.Dataset,
@@ -85,7 +85,60 @@ def weighted_mae_per_level(
 
   losses = xarray_tree.map_structure(loss, predictions, targets)
   return sum_per_variable_losses(losses, per_variable_weights)
-""" end of weighted mean average error loss."""
+
+
+"""Weighted mean bias error loss."""
+def weighted_mbe_per_level(
+    predictions: xarray.Dataset,
+    targets: xarray.Dataset,
+    per_variable_weights: Mapping[str, float],
+) -> LossAndDiagnostics:
+  """Latitude- and pressure-level-weighted MAE loss."""
+  def loss(prediction, target):
+    loss = (prediction - target)
+    loss *= normalized_latitude_weights(target).astype(loss.dtype)
+    if 'level' in target.dims:
+      loss *= normalized_level_weights(target).astype(loss.dtype)
+    return _mean_preserving_batch(loss)
+
+  losses = xarray_tree.map_structure(loss, predictions, targets)
+  return sum_per_variable_losses(losses, per_variable_weights)
+
+
+"""Weighted mean absolute percentage error loss."""
+def weighted_mape_per_level(
+    predictions: xarray.Dataset,
+    targets: xarray.Dataset,
+    per_variable_weights: Mapping[str, float],
+) -> LossAndDiagnostics:
+  """Latitude- and pressure-level-weighted MAE loss."""
+  def loss(prediction, target):
+    loss = 100 * (np.abs((prediction - target)/target))
+    loss *= normalized_latitude_weights(target).astype(loss.dtype)
+    if 'level' in target.dims:
+      loss *= normalized_level_weights(target).astype(loss.dtype)
+    return _mean_preserving_batch(loss)
+
+  losses = xarray_tree.map_structure(loss, predictions, targets)
+  return sum_per_variable_losses(losses, per_variable_weights)
+
+"""Weighted logcosh loss."""
+def weighted_logcosh_per_level(
+    predictions: xarray.Dataset,
+    targets: xarray.Dataset,
+    per_variable_weights: Mapping[str, float],
+) -> LossAndDiagnostics:
+  """Latitude- and pressure-level-weighted MAE loss."""
+  def loss(prediction, target):
+    error = (prediction - target)
+    loss = np.log((np.exp(error) + np.exp(-error))/2)
+    loss *= normalized_latitude_weights(target).astype(loss.dtype)
+    if 'level' in target.dims:
+      loss *= normalized_level_weights(target).astype(loss.dtype)
+    return _mean_preserving_batch(loss)
+
+  losses = xarray_tree.map_structure(loss, predictions, targets)
+  return sum_per_variable_losses(losses, per_variable_weights)
 
 
 def _mean_preserving_batch(x: xarray.DataArray) -> xarray.DataArray:
