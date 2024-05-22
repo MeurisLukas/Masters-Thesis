@@ -397,7 +397,7 @@ class GraphCast(predictor_base.Predictor):
     predictions = self(
         inputs, targets_template=targets, forcings=forcings, is_training=True)
     # Compute loss.
-    loss = losses.weighted_mae_per_level( #todo: change this line for different lossFunction.  [mse,mae,mbe,mape,logcosh]
+    loss = losses.weighted_rse_per_level( #todo: change this line for different lossFunction.  [mse,mae,logcosh, rse, rae]
         predictions, targets,
         per_variable_weights={
             # Any variables not specified here are weighted as 1.0.

@@ -22,6 +22,7 @@ import xarray
 
 
 LossAndDiagnostics = tuple[xarray.DataArray, xarray.Dataset]
+Epsilon = 1e-10
 
 
 class LossFunction(Protocol):
@@ -52,6 +53,7 @@ class LossFunction(Protocol):
         batch before logging.
     """
 
+
 """Weighted mean squared error loss."""
 def weighted_mse_per_level(
     predictions: xarray.Dataset,
@@ -68,6 +70,7 @@ def weighted_mse_per_level(
 
   losses = xarray_tree.map_structure(loss, predictions, targets)
   return sum_per_variable_losses(losses, per_variable_weights)
+
 
 """Weighted mean absolute error loss."""
 def weighted_mae_per_level(
@@ -87,51 +90,56 @@ def weighted_mae_per_level(
   return sum_per_variable_losses(losses, per_variable_weights)
 
 
-"""Weighted mean bias error loss."""
-def weighted_mbe_per_level(
-    predictions: xarray.Dataset,
-    targets: xarray.Dataset,
-    per_variable_weights: Mapping[str, float],
-) -> LossAndDiagnostics:
-  """Latitude- and pressure-level-weighted MAE loss."""
-  def loss(prediction, target):
-    loss = (prediction - target)
-    loss *= normalized_latitude_weights(target).astype(loss.dtype)
-    if 'level' in target.dims:
-      loss *= normalized_level_weights(target).astype(loss.dtype)
-    return _mean_preserving_batch(loss)
-
-  losses = xarray_tree.map_structure(loss, predictions, targets)
-  return sum_per_variable_losses(losses, per_variable_weights)
-
-
-"""Weighted mean absolute percentage error loss."""
-def weighted_mape_per_level(
-    predictions: xarray.Dataset,
-    targets: xarray.Dataset,
-    per_variable_weights: Mapping[str, float],
-) -> LossAndDiagnostics:
-  """Latitude- and pressure-level-weighted MAE loss."""
-  def loss(prediction, target):
-    loss = 100 * (np.abs((prediction - target)/target))
-    loss *= normalized_latitude_weights(target).astype(loss.dtype)
-    if 'level' in target.dims:
-      loss *= normalized_level_weights(target).astype(loss.dtype)
-    return _mean_preserving_batch(loss)
-
-  losses = xarray_tree.map_structure(loss, predictions, targets)
-  return sum_per_variable_losses(losses, per_variable_weights)
-
 """Weighted logcosh loss."""
 def weighted_logcosh_per_level(
     predictions: xarray.Dataset,
     targets: xarray.Dataset,
     per_variable_weights: Mapping[str, float],
 ) -> LossAndDiagnostics:
-  """Latitude- and pressure-level-weighted MAE loss."""
+  """Latitude- and pressure-level-weighted logcosh loss."""
   def loss(prediction, target):
     error = (prediction - target)
     loss = np.log((np.exp(error) + np.exp(-error))/2)
+    loss *= normalized_latitude_weights(target).astype(loss.dtype)
+    if 'level' in target.dims:
+      loss *= normalized_level_weights(target).astype(loss.dtype)
+    return _mean_preserving_batch(loss)
+
+  losses = xarray_tree.map_structure(loss, predictions, targets)
+  return sum_per_variable_losses(losses, per_variable_weights)
+
+
+"""Weighted relative squared error loss."""
+def weighted_rse_per_level(
+    predictions: xarray.Dataset,
+    targets: xarray.Dataset,
+    per_variable_weights: Mapping[str, float],
+) -> LossAndDiagnostics:
+  """Latitude- and pressure-level-weighted RSE loss."""
+  def loss(prediction, target):
+    target_mean = target.mean(skipna=True)
+    denominator = (target - target_mean)**2 
+    loss =  ( (prediction - target)**2 ) / (denominator + Epsilon ) 
+    loss *= normalized_latitude_weights(target).astype(loss.dtype)
+    if 'level' in target.dims:
+      loss *= normalized_level_weights(target).astype(loss.dtype)
+    return _mean_preserving_batch(loss)
+
+  losses = xarray_tree.map_structure(loss, predictions, targets)
+  return sum_per_variable_losses(losses, per_variable_weights)
+    
+
+"""Weighted relative absolute error loss."""
+def weighted_rae_per_level(
+    predictions: xarray.Dataset,
+    targets: xarray.Dataset,
+    per_variable_weights: Mapping[str, float],
+) -> LossAndDiagnostics:
+  """Latitude- and pressure-level-weighted RAE loss."""
+  def loss(prediction, target):
+    target_mean = target.mean(skipna=True)
+    denominator = np.abs(target - target_mean)
+    loss = np.abs(prediction - target) / (denominator + Epsilon)
     loss *= normalized_latitude_weights(target).astype(loss.dtype)
     if 'level' in target.dims:
       loss *= normalized_level_weights(target).astype(loss.dtype)
