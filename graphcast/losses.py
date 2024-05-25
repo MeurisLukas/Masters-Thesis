@@ -109,49 +109,6 @@ def weighted_logcosh_per_level(
   return sum_per_variable_losses(losses, per_variable_weights)
 
 
-"""Weighted relative squared error loss."""
-def weighted_rse_per_level(
-    predictions: xarray.Dataset,
-    targets: xarray.Dataset,
-    per_variable_weights: Mapping[str, float],
-) -> LossAndDiagnostics:
-  """Latitude- and pressure-level-weighted RSE loss."""
-  def loss(prediction, target):
-    target_mean = target.mean(skipna=True)
-    denominator = (target - target_mean)**2 
-    loss =  ( (prediction - target)**2 ) / (denominator + Epsilon ) 
-    loss *= normalized_latitude_weights(target).astype(loss.dtype)
-    if 'level' in target.dims:
-      loss *= normalized_level_weights(target).astype(loss.dtype)
-    return _mean_preserving_batch(loss)
-
-  losses = xarray_tree.map_structure(loss, predictions, targets)
-  return sum_per_variable_losses(losses, per_variable_weights)
-    
-
-"""Weighted relative absolute error loss."""
-def weighted_rae_per_level(
-    predictions: xarray.Dataset,
-    targets: xarray.Dataset,
-    per_variable_weights: Mapping[str, float],
-) -> LossAndDiagnostics:
-  """Latitude- and pressure-level-weighted RAE loss."""
-  def loss(prediction, target):
-    target_mean = target.mean(skipna=True)
-    denominator = np.abs(target - target_mean)
-    loss = np.abs(prediction - target) / (denominator + Epsilon)
-    loss *= normalized_latitude_weights(target).astype(loss.dtype)
-    if 'level' in target.dims:
-      loss *= normalized_level_weights(target).astype(loss.dtype)
-    return _mean_preserving_batch(loss)
-
-  losses = xarray_tree.map_structure(loss, predictions, targets)
-  return sum_per_variable_losses(losses, per_variable_weights)
-
-
-def _mean_preserving_batch(x: xarray.DataArray) -> xarray.DataArray:
-  return x.mean([d for d in x.dims if d != 'batch'], skipna=False)
-
 
 def sum_per_variable_losses(
     per_variable_losses: Mapping[str, xarray.DataArray],
